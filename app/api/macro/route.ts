@@ -99,10 +99,16 @@ export async function GET() {
   // NZD/KRW always comes from ExchangeRate-API (no key), independent of FRED.
   const nzdKrwPromise = fetchNzdKrw();
 
+  // Reorders the strip so WTI oil is last, with NZD/KRW just before it.
+  function order(base: MacroSeries[], nzdKrw: MacroSeries): MacroSeries[] {
+    const oil = base.filter((s) => s.id === "DCOILWTICO");
+    const rest = base.filter((s) => s.id !== "DCOILWTICO");
+    return [...rest, nzdKrw, ...oil];
+  }
+
   if (!FRED_KEY) {
     const nzdKrw = await nzdKrwPromise;
-    // Use live NZD/KRW even when FRED isn't configured; rest is demo.
-    const series = [...demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    const series = order(demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO);
     return NextResponse.json({ series, isDemo: true, fetchedAt: new Date().toISOString() });
   }
   try {
@@ -115,11 +121,11 @@ export async function GET() {
       ),
       nzdKrwPromise,
     ]);
-    const series = [...results, nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    const series = order(results, nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO);
     return NextResponse.json({ series, isDemo: false, fetchedAt: new Date().toISOString() });
   } catch (e: any) {
     const nzdKrw = await nzdKrwPromise.catch(() => NZDKRW_DEMO);
-    const series = [...demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    const series = order(demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO);
     return NextResponse.json({ series, isDemo: true, error: e.message, fetchedAt: new Date().toISOString() });
   }
 }
