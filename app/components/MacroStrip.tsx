@@ -1,0 +1,48 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface Series {
+  id: string;
+  label: string;
+  value: number | null;
+  unit: string;
+  asOf: string | null;
+  source: string;
+}
+
+export function MacroStrip() {
+  const [series, setSeries] = useState<Series[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/macro")
+      .then((r) => r.json())
+      .then((d) => {
+        setSeries(d.series || []);
+        setIsDemo(!!d.isDemo);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!series.length) return <div className="macro-strip" />;
+
+  return (
+    <div className="macro-strip">
+      {series.map((s) => (
+        <div className="macro-cell" key={s.id}>
+          <div className="macro-label">
+            {s.label}
+            {isDemo && <span className="badge-demo">demo</span>}
+          </div>
+          <div className="macro-value">
+            {s.value != null ? `${s.unit}${s.value.toLocaleString()}` : "—"}
+          </div>
+          <div className="macro-asof">
+            {s.asOf || "—"} · {s.source}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
