@@ -51,16 +51,19 @@ async function fetchSeries(id: string): Promise<{ value: number | null; asOf: st
  * the latest month to the same month a year earlier.
  */
 async function fetchCpiYoY(): Promise<{ value: number | null; asOf: string | null }> {
-  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=13`;
+  // Pull 18 months so we always have a data point ~12 months before the latest,
+  // even with FRED's publication lag or occasional gaps.
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=18`;
   const res = await fetch(url, { next: { revalidate: 3600 } });
   const data = await res.json();
   const obs = (data?.observations || []).filter((o: any) => o.value !== ".");
-  if (obs.length < 13) {
-    // Not enough history — fall back to whatever latest we have, no YoY.
+  if (obs.length < 2) {
     return { value: null, asOf: obs[0]?.date ?? null };
   }
   const latest = parseFloat(obs[0].value);
-  const yearAgo = parseFloat(obs[12].value);
+  // Prefer the entry ~12 months back; if not present, use the oldest we have.
+  const yearAgoObs = obs[12] ?? obs[obs.length - 1];
+  const yearAgo = parseFloat(yearAgoObs.value);
   if (!yearAgo) return { value: null, asOf: obs[0].date };
   const yoy = ((latest - yearAgo) / yearAgo) * 100;
   return { value: Number(yoy.toFixed(1)), asOf: obs[0].date };
