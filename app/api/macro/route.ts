@@ -33,6 +33,39 @@ async function fetchSeries(id: string): Promise<{ value: number | null; asOf: st
   return { value: parseFloat(obs.value), asOf: obs.date };
 }
 
+/**
+ * NZD→KRW via ExchangeRate-API open access (no key required).
+ * There's no direct NZD/KRW series, so we read USD-based rates and cross-compute:
+ * KRW per NZD = (KRW per USD) / (NZD per USD).
+ * Cached 1h to stay well under the open endpoint's rate limit.
+ */
+async function fetchNzdKrw(): Promise<MacroSeries> {
+  const base: MacroSeries = {
+    id: "NZDKRW",
+    label: "원/뉴질랜드달러",
+    value: null,
+    unit: "₩",
+    asOf: null,
+    source: "ExchangeRate-API",
+  };
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD", {
+      next: { revalidate: 3600 },
+    });
+    const data = await res.json();
+    const krwPerUsd = data?.rates?.KRW;
+    const nzdPerUsd = data?.rates?.NZD;
+    if (krwPerUsd && nzdPerUsd) {
+      base.value = Number((krwPerUsd / nzdPerUsd).toFixed(2));
+      // er-api returns last-update timestamps; prefer the UTC date string.
+      base.asOf = (data.time_last_update_utc || "").slice(0, 16) || new Date().toISOString().slice(0, 10);
+    }
+  } catch (e: any) {
+    base.source = `ExchangeRate-API 오류: ${e.message}`;
+  }
+  return base;
+}
+
 function demoMacro(): MacroSeries[] {
   const today = new Date().toISOString().slice(0, 10);
   const vals: Record<string, number> = {
@@ -53,19 +86,40 @@ function demoMacro(): MacroSeries[] {
   }));
 }
 
+const NZDKRW_DEMO: MacroSeries = {
+  id: "NZDKRW",
+  label: "원/뉴질랜드달러",
+  value: 838.5,
+  unit: "₩",
+  asOf: new Date().toISOString().slice(0, 10),
+  source: "demo",
+};
+
 export async function GET() {
+  // NZD/KRW always comes from ExchangeRate-API (no key), independent of FRED.
+  const nzdKrwPromise = fetchNzdKrw();
+
   if (!FRED_KEY) {
-    return NextResponse.json({ series: demoMacro(), isDemo: true, fetchedAt: new Date().toISOString() });
+    const nzdKrw = await nzdKrwPromise;
+    // Use live NZD/KRW even when FRED isn't configured; rest is demo.
+    const series = [...demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    return NextResponse.json({ series, isDemo: true, fetchedAt: new Date().toISOString() });
   }
   try {
-    const results = await Promise.all(
-      SERIES.map(async (s) => {
-        const { value, asOf } = await fetchSeries(s.id);
-        return { id: s.id, label: s.label, value, unit: s.unit, asOf, source: "FRED" } as MacroSeries;
-      })
-    );
-    return NextResponse.json({ series: results, isDemo: false, fetchedAt: new Date().toISOString() });
+    const [results, nzdKrw] = await Promise.all([
+      Promise.all(
+        SERIES.map(async (s) => {
+          const { value, asOf } = await fetchSeries(s.id);
+          return { id: s.id, label: s.label, value, unit: s.unit, asOf, source: "FRED" } as MacroSeries;
+        })
+      ),
+      nzdKrwPromise,
+    ]);
+    const series = [...results, nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    return NextResponse.json({ series, isDemo: false, fetchedAt: new Date().toISOString() });
   } catch (e: any) {
-    return NextResponse.json({ series: demoMacro(), isDemo: true, error: e.message, fetchedAt: new Date().toISOString() });
+    const nzdKrw = await nzdKrwPromise.catch(() => NZDKRW_DEMO);
+    const series = [...demoMacro(), nzdKrw.value != null ? nzdKrw : NZDKRW_DEMO];
+    return NextResponse.json({ series, isDemo: true, error: e.message, fetchedAt: new Date().toISOString() });
   }
 }
