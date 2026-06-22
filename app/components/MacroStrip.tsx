@@ -13,14 +13,12 @@ interface Series {
 
 export function MacroStrip() {
   const [series, setSeries] = useState<Series[]>([]);
-  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
     fetch("/api/macro")
       .then((r) => r.json())
       .then((d) => {
         setSeries(d.series || []);
-        setIsDemo(!!d.isDemo);
       })
       .catch(() => {});
   }, []);
@@ -33,7 +31,7 @@ export function MacroStrip() {
         <div className="macro-cell" key={s.id}>
           <div className="macro-label">
             {s.label}
-            {isDemo && <span className="badge-demo">demo</span>}
+            {s.source.startsWith("demo") && <span className="badge-demo">demo</span>}
           </div>
           <div className="macro-value">
             {s.value != null ? `${s.unit}${s.value.toLocaleString()}` : "—"}
