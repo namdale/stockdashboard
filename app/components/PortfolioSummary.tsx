@@ -20,10 +20,12 @@ export function PortfolioSummary({
   symbols,
   holdings,
   hidePnl,
+  onTotals,
 }: {
   symbols: string[];
   holdings: Record<string, Holding>;
   hidePnl: boolean;
+  onTotals?: (t: { valueNzd: number; costNzd: number }) => void;
 }) {
   const [fx, setFx] = useState<FxData | null>(null);
   const [totals, setTotals] = useState<Totals>({ valueNzd: 0, costNzd: 0, ready: false });
@@ -64,7 +66,10 @@ export function PortfolioSummary({
           }
         })
       );
-      if (!cancelled) setTotals({ valueNzd, costNzd, ready: true });
+      if (!cancelled) {
+        setTotals({ valueNzd, costNzd, ready: true });
+        onTotals?.({ valueNzd, costNzd });
+      }
     }
     compute();
     return () => {
