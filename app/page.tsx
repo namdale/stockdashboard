@@ -5,6 +5,7 @@ import { HoldingCard } from "./components/HoldingCard";
 import { MacroStrip } from "./components/MacroStrip";
 import { ThemeBoard } from "./components/ThemeBoard";
 import { PortfolioSummary } from "./components/PortfolioSummary";
+import { PerformanceChart, recordSnapshot } from "./components/PerformanceChart";
 
 const DEFAULT_SYMBOLS = ["NVDA", "AAPL", "005930.KS"];
 const STORAGE_KEY = "signal.symbols";
@@ -148,7 +149,13 @@ export default function Page() {
             {hidePnl ? "👁 수익 보기" : "🙈 수익 숨기기"}
           </button>
         </div>
-        <PortfolioSummary symbols={symbols} holdings={holdings} hidePnl={hidePnl} />
+        <PortfolioSummary
+          symbols={symbols}
+          holdings={holdings}
+          hidePnl={hidePnl}
+          onTotals={(t) => recordSnapshot(t.valueNzd, t.costNzd)}
+        />
+        <PerformanceChart hidePnl={hidePnl} />
         {symbols.length === 0 ? (
           <div className="empty">티커를 추가하면 시세·뉴스·시그널이 표시됩니다.</div>
         ) : (
