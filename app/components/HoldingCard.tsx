@@ -60,12 +60,32 @@ function sourceUrl(symbol: string): string {
   return `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`;
 }
 
-export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: () => void }) {
+interface Holding {
+  shares: number;
+  avgCost: number;
+}
+
+export function HoldingCard({
+  symbol,
+  onRemove,
+  holding,
+  hidePnl,
+  onHoldingChange,
+}: {
+  symbol: string;
+  onRemove: () => void;
+  holding: Holding | null;
+  hidePnl: boolean;
+  onHoldingChange: (h: Holding | null) => void;
+}) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsDemo, setNewsDemo] = useState(false);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [sharesInput, setSharesInput] = useState(holding ? String(holding.shares) : "");
+  const [costInput, setCostInput] = useState(holding ? String(holding.avgCost) : "");
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +133,25 @@ export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: ()
   const up = quote.change >= 0;
   const sparkData = quote.closes.map((v, i) => ({ i, v }));
 
+  // Portfolio math (Korea-style colors: gain=red, loss=blue).
+  const cur = quote.currency === "USD" ? "$" : "";
+  const won = quote.currency === "KRW" ? "원" : "";
+  const fmt = (n: number) =>
+    `${cur}${n.toLocaleString(undefined, { maximumFractionDigits: quote.currency === "KRW" ? 0 : 2 })}${won}`;
+  const hasHolding = holding && holding.shares > 0 && holding.avgCost > 0;
+  const value = hasHolding ? quote.price * holding!.shares : 0;
+  const cost = hasHolding ? holding!.avgCost * holding!.shares : 0;
+  const retAmt = value - cost;
+  const retPct = cost > 0 ? (retAmt / cost) * 100 : 0;
+  const gain = retAmt >= 0;
+
+  function saveHolding() {
+    const sh = parseFloat(sharesInput) || 0;
+    const ac = parseFloat(costInput) || 0;
+    onHoldingChange(sh > 0 || ac > 0 ? { shares: sh, avgCost: ac } : null);
+    setEditing(false);
+  }
+
   return (
     <div className="card">
       <div className="card-head">
@@ -155,6 +194,58 @@ export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: ()
             />
           </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* ── 보유 정보 (수량/평단가 입력 → 평가금액·수익률 자동) ── */}
+      <div className="holding-box">
+        {editing ? (
+          <div className="holding-edit">
+            <label>
+              수량
+              <input
+                type="number"
+                inputMode="decimal"
+                value={sharesInput}
+                onChange={(e) => setSharesInput(e.target.value)}
+                placeholder="0"
+              />
+            </label>
+            <label>
+              평단가
+              <input
+                type="number"
+                inputMode="decimal"
+                value={costInput}
+                onChange={(e) => setCostInput(e.target.value)}
+                placeholder="0"
+              />
+            </label>
+            <button className="hb-save" onClick={saveHolding}>
+              저장
+            </button>
+          </div>
+        ) : hasHolding ? (
+          <div className="holding-view" onClick={() => setEditing(true)} title="클릭하여 수정">
+            <div className="hb-row">
+              <span className="hb-k">수량</span>
+              <span className="hb-v">{hidePnl ? "••••" : holding!.shares.toLocaleString()}</span>
+              <span className="hb-k">평단</span>
+              <span className="hb-v">{hidePnl ? "••••" : fmt(holding!.avgCost)}</span>
+            </div>
+            <div className="hb-row">
+              <span className="hb-k">평가</span>
+              <span className="hb-v">{hidePnl ? "••••" : fmt(value)}</span>
+              <span className="hb-k">수익</span>
+              <span className="hb-v" style={{ color: hidePnl ? undefined : gain ? "#ff4d4d" : "#3d7bff" }}>
+                {hidePnl ? "••••" : `${gain ? "+" : ""}${fmt(retAmt)} (${gain ? "+" : ""}${retPct.toFixed(2)}%)`}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <button className="hb-add" onClick={() => setEditing(true)}>
+            + 수량·평단가 입력
+          </button>
+        )}
       </div>
 
       {signal && (
