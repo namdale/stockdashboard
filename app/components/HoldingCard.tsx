@@ -53,6 +53,13 @@ function ageText(m: number) {
   return `${Math.round(m / 1440)}일`;
 }
 
+/** Link to the original source page for a ticker. Korean tickers → Naver Finance, else Yahoo. */
+function sourceUrl(symbol: string): string {
+  const m = symbol.match(/^(\d{6})\.(KS|KQ)$/i);
+  if (m) return `https://finance.naver.com/item/main.naver?code=${m[1]}`;
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`;
+}
+
 export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: () => void }) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -109,13 +116,20 @@ export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: ()
   return (
     <div className="card">
       <div className="card-head">
-        <div>
+        <a
+          className="sym-link"
+          href={sourceUrl(quote.symbol)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`${quote.symbol} 원본 페이지 보기`}
+        >
           <div className="sym">
             {quote.symbol}
             {quote.isDemo && <span className="badge-demo">demo</span>}
+            <span className="ext-arrow" aria-hidden="true">↗</span>
           </div>
           <div className="name">{quote.name}</div>
-        </div>
+        </a>
         <div>
           <div className="price">
             {quote.currency === "USD" ? "$" : ""}
