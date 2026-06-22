@@ -7,6 +7,13 @@ import { ThemeBoard } from "./components/ThemeBoard";
 
 const DEFAULT_SYMBOLS = ["NVDA", "AAPL", "005930.KS"];
 const STORAGE_KEY = "signal.symbols";
+const HOLDINGS_KEY = "signal.holdings";
+const HIDE_KEY = "signal.hidePnl";
+
+export interface Holding {
+  shares: number;
+  avgCost: number;
+}
 
 export default function Page() {
   const [symbols, setSymbols] = useState<string[]>([]);
@@ -14,6 +21,8 @@ export default function Page() {
   const [now, setNow] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [holdings, setHoldings] = useState<Record<string, Holding>>({});
+  const [hidePnl, setHidePnl] = useState(false);
 
   useEffect(() => {
     try {
@@ -22,6 +31,30 @@ export default function Page() {
     } catch {
       setSymbols(DEFAULT_SYMBOLS);
     }
+    try {
+      const h = JSON.parse(localStorage.getItem(HOLDINGS_KEY) || "{}");
+      if (h && typeof h === "object") setHoldings(h);
+    } catch {
+      /* ignore */
+    }
+    setHidePnl(localStorage.getItem(HIDE_KEY) === "1");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(HOLDINGS_KEY, JSON.stringify(holdings));
+  }, [holdings]);
+
+  useEffect(() => {
+    localStorage.setItem(HIDE_KEY, hidePnl ? "1" : "0");
+  }, [hidePnl]);
+
+  const setHolding = useCallback((symbol: string, h: Holding | null) => {
+    setHoldings((prev) => {
+      const next = { ...prev };
+      if (h && (h.shares > 0 || h.avgCost > 0)) next[symbol] = h;
+      else delete next[symbol];
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -104,12 +137,21 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="eyebrow">포트폴리오 · {symbols.length}종목</div>
+        <div className="eyebrow port-head">
+          <span>포트폴리오 · {symbols.length}종목</span>
+          <button
+            className="hide-toggle"
+            onClick={() => setHidePnl((v) => !v)}
+            title={hidePnl ? "수익 정보 표시" : "수익 정보 숨기기"}
+          >
+            {hidePnl ? "👁 수익 보기" : "🙈 수익 숨기기"}
+          </button>
+        </div>
         {symbols.length === 0 ? (
           <div className="empty">티커를 추가하면 시세·뉴스·시그널이 표시됩니다.</div>
         ) : (
           <>
-            <div className="reorder-hint">◀ ▶ 버튼으로 종목 순서를 바꿀 수 있어요 (드래그도 가능)</div>
+            <div className="reorder-hint">⠿ 핸들을 드래그해서 종목 순서를 바꿀 수 있어요</div>
             <div className="grid">
               {symbols.map((s, i) => (
                 <div
@@ -119,38 +161,32 @@ export default function Page() {
                     (dragIndex === i ? " dragging" : "") +
                     (overIndex === i && dragIndex !== i ? " drop-target" : "")
                   }
-                  draggable
-                  onDragStart={() => setDragIndex(i)}
                   onDragOver={(e) => {
                     e.preventDefault();
                     if (overIndex !== i) setOverIndex(i);
                   }}
                   onDrop={() => handleDrop(i)}
-                  onDragEnd={() => {
-                    setDragIndex(null);
-                    setOverIndex(null);
-                  }}
                 >
-                  <div className="card-controls">
-                    <button
-                      className="move-btn"
-                      aria-label="앞으로 이동"
-                      disabled={i === 0}
-                      onClick={() => reorder(i, i - 1)}
-                    >
-                      ◀
-                    </button>
-                    <span className="drag-grip" aria-hidden="true">⠿</span>
-                    <button
-                      className="move-btn"
-                      aria-label="뒤로 이동"
-                      disabled={i === symbols.length - 1}
-                      onClick={() => reorder(i, i + 1)}
-                    >
-                      ▶
-                    </button>
-                  </div>
-                  <HoldingCard symbol={s} onRemove={() => remove(s)} />
+                  <span
+                    className="drag-handle"
+                    draggable
+                    onDragStart={() => setDragIndex(i)}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      setOverIndex(null);
+                    }}
+                    title="드래그하여 순서 변경"
+                    aria-label="드래그하여 순서 변경"
+                  >
+                    ⠿
+                  </span>
+                  <HoldingCard
+                    symbol={s}
+                    onRemove={() => remove(s)}
+                    holding={holdings[s] || null}
+                    hidePnl={hidePnl}
+                    onHoldingChange={(h) => setHolding(s, h)}
+                  />
                 </div>
               ))}
             </div>
