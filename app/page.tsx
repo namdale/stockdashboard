@@ -12,6 +12,8 @@ export default function Page() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [now, setNow] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -52,6 +54,26 @@ export default function Page() {
     setSymbols((prev) => prev.filter((x) => x !== s));
   }, []);
 
+  // Move a card from one position to another (used by drag-drop and arrow buttons).
+  const reorder = useCallback((from: number, to: number) => {
+    setSymbols((prev) => {
+      if (to < 0 || to >= prev.length || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const handleDrop = useCallback(
+    (to: number) => {
+      if (dragIndex !== null) reorder(dragIndex, to);
+      setDragIndex(null);
+      setOverIndex(null);
+    },
+    [dragIndex, reorder]
+  );
+
   return (
     <>
       <div className="topbar">
@@ -86,11 +108,53 @@ export default function Page() {
         {symbols.length === 0 ? (
           <div className="empty">티커를 추가하면 시세·뉴스·시그널이 표시됩니다.</div>
         ) : (
-          <div className="grid">
-            {symbols.map((s) => (
-              <HoldingCard key={s} symbol={s} onRemove={() => remove(s)} />
-            ))}
-          </div>
+          <>
+            <div className="reorder-hint">◀ ▶ 버튼으로 종목 순서를 바꿀 수 있어요 (드래그도 가능)</div>
+            <div className="grid">
+              {symbols.map((s, i) => (
+                <div
+                  key={s}
+                  className={
+                    "card-slot" +
+                    (dragIndex === i ? " dragging" : "") +
+                    (overIndex === i && dragIndex !== i ? " drop-target" : "")
+                  }
+                  draggable
+                  onDragStart={() => setDragIndex(i)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (overIndex !== i) setOverIndex(i);
+                  }}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={() => {
+                    setDragIndex(null);
+                    setOverIndex(null);
+                  }}
+                >
+                  <div className="card-controls">
+                    <button
+                      className="move-btn"
+                      aria-label="앞으로 이동"
+                      disabled={i === 0}
+                      onClick={() => reorder(i, i - 1)}
+                    >
+                      ◀
+                    </button>
+                    <span className="drag-grip" aria-hidden="true">⠿</span>
+                    <button
+                      className="move-btn"
+                      aria-label="뒤로 이동"
+                      disabled={i === symbols.length - 1}
+                      onClick={() => reorder(i, i + 1)}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                  <HoldingCard symbol={s} onRemove={() => remove(s)} />
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         <div className="eyebrow">AI 반도체 다음 호황 · 테마 리서치</div>
