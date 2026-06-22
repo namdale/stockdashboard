@@ -215,6 +215,35 @@ a { color: inherit; text-decoration: none; }
 
 .loading { font-family: var(--mono); font-size: 12px; color: var(--text-faint); }
 
+/* ---- performance chart ---- */
+.perf-card {
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 18px; margin: 0 0 16px;
+}
+.perf-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.perf-title { font-size: 14px; font-weight: 700; }
+.perf-ranges { display: flex; gap: 3px; flex-wrap: wrap; }
+.perf-range {
+  background: var(--bg-elev); border: 1px solid var(--line); color: var(--text-dim);
+  cursor: pointer; font-size: 11px; padding: 4px 9px; border-radius: 6px;
+  font-family: var(--mono);
+}
+.perf-range:hover { color: var(--text); }
+.perf-range.active { background: var(--accent); color: #04140f; border-color: var(--accent); font-weight: 700; }
+.perf-summary { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.perf-change { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.perf-current { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.perf-chart { height: 180px; }
+.perf-empty {
+  text-align: center; color: var(--text-faint); font-size: 13px; line-height: 1.7;
+  padding: 28px 12px;
+}
+.perf-empty-sub { font-size: 11px; font-family: var(--mono); }
+.perf-note { font-size: 10px; color: var(--text-faint); margin-top: 10px; font-family: var(--mono); }
+
 /* ---- portfolio NZD summary ---- */
 .summary-card {
   background: linear-gradient(135deg, var(--bg-card), var(--bg-elev));
