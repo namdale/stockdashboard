@@ -135,7 +135,7 @@ export function HoldingCard({ symbol, onRemove }: { symbol: string; onRemove: ()
             <Line
               type="monotone"
               dataKey="v"
-              stroke={up ? "#3ddc84" : "#ff5c5c"}
+              stroke={up ? "#ff4d4d" : "#3d7bff"}
               strokeWidth={1.5}
               dot={false}
             />
