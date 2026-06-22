@@ -13,16 +13,28 @@ interface MacroSeries {
   unit: string;
   asOf: string | null;
   source: string;
+  url: string;
 }
 
 const SERIES: { id: string; label: string; unit: string }[] = [
   { id: "DGS10", label: "美 10년 국채 금리", unit: "%" },
   { id: "DGS2", label: "美 2년 국채 금리", unit: "%" },
   { id: "FEDFUNDS", label: "연방기금금리", unit: "%" },
-  { id: "CPIAUCSL", label: "미국 CPI(지수)", unit: "" },
+  { id: "CPIAUCSL", label: "미국 CPI(YoY)", unit: "%" },
   { id: "DEXKOUS", label: "원/달러 환율", unit: "₩" },
   { id: "DCOILWTICO", label: "WTI 유가", unit: "$" },
 ];
+
+// Source page each metric links to when clicked.
+const SOURCE_URL: Record<string, string> = {
+  DGS10: "https://fred.stlouisfed.org/series/DGS10",
+  DGS2: "https://fred.stlouisfed.org/series/DGS2",
+  FEDFUNDS: "https://fred.stlouisfed.org/series/FEDFUNDS",
+  CPIAUCSL: "https://fred.stlouisfed.org/series/CPIAUCSL",
+  DEXKOUS: "https://fred.stlouisfed.org/series/DEXKOUS",
+  DCOILWTICO: "https://fred.stlouisfed.org/series/DCOILWTICO",
+  NZDKRW: "https://www.google.com/finance/quote/NZD-KRW",
+};
 
 async function fetchSeries(id: string): Promise<{ value: number | null; asOf: string | null }> {
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=1`;
@@ -31,6 +43,27 @@ async function fetchSeries(id: string): Promise<{ value: number | null; asOf: st
   const obs = data?.observations?.[0];
   if (!obs || obs.value === ".") return { value: null, asOf: obs?.date ?? null };
   return { value: parseFloat(obs.value), asOf: obs.date };
+}
+
+/**
+ * CPI as a year-over-year inflation rate (%), which is what people mean by "CPI".
+ * The raw CPIAUCSL series is an index level (~320), so we pull 13 months and compare
+ * the latest month to the same month a year earlier.
+ */
+async function fetchCpiYoY(): Promise<{ value: number | null; asOf: string | null }> {
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=13`;
+  const res = await fetch(url, { next: { revalidate: 3600 } });
+  const data = await res.json();
+  const obs = (data?.observations || []).filter((o: any) => o.value !== ".");
+  if (obs.length < 13) {
+    // Not enough history — fall back to whatever latest we have, no YoY.
+    return { value: null, asOf: obs[0]?.date ?? null };
+  }
+  const latest = parseFloat(obs[0].value);
+  const yearAgo = parseFloat(obs[12].value);
+  if (!yearAgo) return { value: null, asOf: obs[0].date };
+  const yoy = ((latest - yearAgo) / yearAgo) * 100;
+  return { value: Number(yoy.toFixed(1)), asOf: obs[0].date };
 }
 
 /**
@@ -47,6 +80,7 @@ async function fetchNzdKrw(): Promise<MacroSeries> {
     unit: "₩",
     asOf: null,
     source: "ExchangeRate-API",
+    url: SOURCE_URL.NZDKRW,
   };
   try {
     const res = await fetch("https://open.er-api.com/v6/latest/USD", {
@@ -72,7 +106,7 @@ function demoMacro(): MacroSeries[] {
     DGS10: 4.21,
     DGS2: 3.86,
     FEDFUNDS: 4.0,
-    CPIAUCSL: 320.4,
+    CPIAUCSL: 2.9,
     DEXKOUS: 1372.5,
     DCOILWTICO: 68.9,
   };
@@ -83,6 +117,7 @@ function demoMacro(): MacroSeries[] {
     unit: s.unit,
     asOf: today,
     source: "demo (FRED 키 미설정)",
+    url: SOURCE_URL[s.id] || "",
   }));
 }
 
@@ -93,6 +128,7 @@ const NZDKRW_DEMO: MacroSeries = {
   unit: "₩",
   asOf: new Date().toISOString().slice(0, 10),
   source: "demo",
+  url: SOURCE_URL.NZDKRW,
 };
 
 export async function GET() {
@@ -115,8 +151,9 @@ export async function GET() {
     const [results, nzdKrw] = await Promise.all([
       Promise.all(
         SERIES.map(async (s) => {
-          const { value, asOf } = await fetchSeries(s.id);
-          return { id: s.id, label: s.label, value, unit: s.unit, asOf, source: "FRED" } as MacroSeries;
+          const { value, asOf } =
+            s.id === "CPIAUCSL" ? await fetchCpiYoY() : await fetchSeries(s.id);
+          return { id: s.id, label: s.label, value, unit: s.unit, asOf, source: "FRED", url: SOURCE_URL[s.id] || "" } as MacroSeries;
         })
       ),
       nzdKrwPromise,
